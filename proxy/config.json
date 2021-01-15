@@ -1,0 +1,4 @@
+{
+    "POD_HOST": "develop.symphony.com",
+    "KEY_PATH": "rsa-private.pem"
+}
