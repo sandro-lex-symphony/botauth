@@ -20,6 +20,7 @@ import (
 type Configuration struct {
     POD_HOST string
     KEY_PATH string
+    BOT_NAME string
 }
 
 var (
@@ -69,11 +70,11 @@ func auth(token string, podurl string) string {
 
 // gen JWT from private key
 // the jwt is used to auth with pod
-func genToken(path string) string {
+func genToken(path string, botname string) string {
     expirationTime := time.Now().Add(5 * time.Minute)
     claims := jwt.StandardClaims{
         ExpiresAt: expirationTime.Unix(),
-        Subject: "spaceinvader",
+        Subject: botname,
     }
 
     signBytes, err := ioutil.ReadFile(path)
@@ -94,7 +95,6 @@ func genToken(path string) string {
 func handler(p *httputil.ReverseProxy, st string, kt string, host string) func(http.ResponseWriter, *http.Request) {
     return func(w http.ResponseWriter, r *http.Request) {
         log.Println(r.URL)
-        fmt.Printf("xxx %s\n", r.URL.RequestURI())
         if strings.Contains(r.URL.RequestURI(), "/authenticate") {
             http.Error(w, "{\"token\": \"qweasd\"}", http.StatusOK)
             return
@@ -114,7 +114,7 @@ func main() {
     remote, err := url.Parse(pod_url)
     fatal(err)
 
-    token := genToken(configuration.KEY_PATH)
+    token := genToken(configuration.KEY_PATH, configuration.BOT_NAME)
     sessionToken := auth(token, pod_url + "/login/pubkey/authenticate")
     kmToken := auth(token, pod_url + "/relay/pubkey/authenticate")
     fmt.Println(sessionToken)

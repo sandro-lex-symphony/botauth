@@ -1,4 +1,5 @@
 {
     "POD_HOST": "develop.symphony.com",
-    "KEY_PATH": "rsa-private.pem"
+    "KEY_PATH": "rsa-private.pem",
+    "BOT_NAME": "spaceinvader"
 }
