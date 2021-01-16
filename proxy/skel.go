@@ -7,6 +7,7 @@ import (
     "fmt"
     "io/ioutil"
     "log"
+    "math/rand"
     "net/http"
     "net/url"
     "net/http/httputil"
@@ -35,6 +36,19 @@ func fatal(err error) {
 
 type TokenResult struct {
     Token string
+}
+
+func genRand() string {
+    rand.Seed(time.Now().UnixNano())
+    chars := []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
+        "abcdefghijklmnopqrstuvwxyz" +
+        "0123456789")
+    length := 16
+    var b strings.Builder
+    for i := 0; i < length; i++ {
+        b.WriteRune(chars[rand.Intn(len(chars))])
+    }
+    return b.String() // E.g. "ExcbsVQs"
 }
 
 // interacts with POD to authenticated
@@ -92,12 +106,21 @@ func genToken(path string, botname string) string {
     return out
 }
 
-func handler(p *httputil.ReverseProxy, st string, kt string, host string) func(http.ResponseWriter, *http.Request) {
+func handler(p *httputil.ReverseProxy, st string, kt string, host string, randomKey string) func(http.ResponseWriter, *http.Request) {
     return func(w http.ResponseWriter, r *http.Request) {
         log.Println(r.URL)
         if strings.Contains(r.URL.RequestURI(), "/authenticate") {
-            http.Error(w, "{\"token\": \"qweasd\"}", http.StatusOK)
+            fmt.Println(randomKey)
+            http.Error(w, "{\"token\": \"" + randomKey + "\"}", http.StatusOK)
             return
+        } else {
+            if r.Header.Get("sessionToken") != randomKey {
+                fmt.Println("NOT EQUAL")
+                http.Error(w, "", http.StatusUnauthorized)
+                return
+            } else {
+                fmt.Println("TOKEN OK")
+            }
         }
         r.Header.Set("sessionToken", st)
         r.Header.Set("keyManagerToken", kt)
@@ -119,9 +142,9 @@ func main() {
     kmToken := auth(token, pod_url + "/relay/pubkey/authenticate")
     fmt.Println(sessionToken)
     fmt.Println(kmToken)
-
+    randomKey := genRand()
     rproxy := httputil.NewSingleHostReverseProxy(remote)
-    http.HandleFunc("/", handler(rproxy, sessionToken, kmToken, configuration.POD_HOST))
+    http.HandleFunc("/", handler(rproxy, sessionToken, kmToken, configuration.POD_HOST, randomKey))
     err = http.ListenAndServe(":8888", nil)
     fatal(err)
 }
