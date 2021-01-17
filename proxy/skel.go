@@ -25,12 +25,12 @@ type Configuration struct {
 }
 
 var (
-	signKey   *rsa.PrivateKey
+    signKey   *rsa.PrivateKey
 )
 
 func fatal(err error) {
-	if err != nil {
-		log.Fatal(err)
+    if err != nil {
+        log.Fatal(err)
 	}
 }
 
