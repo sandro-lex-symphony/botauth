@@ -1,0 +1,38 @@
+1. create k8s cluster
+
+2. create namespaces:
+   - ns-GREEN 
+   - ns-BLUE
+
+3. create k8s service accounts:
+   - ksa-GREEN (namespace ns-GREEN only)
+   - ksa-BLUE (namespace ns-BLUE only)
+
+4. create GCP service accounts:
+   - gsa-GREEN
+   - gsa-BLUE
+
+5. bind worload identity, K8s and GCP service accounts
+   - ksa-GREEN <----> gsa-GREEN
+   - ksa-BLUE  <----> gsa-BLUE
+
+###################################################
+TEST: 
+service account GREEN can only use namespace GREEN
+service account BLUE can only use namespace BLUE
+###################################################
+
+6. create secrets (rsa-private-key.pem)
+   - secret-GREEN  
+   - secret-BLUE 
+
+7. bind role to service accounts
+   - gsa-GREEN (read) --> secret-GREEN
+   - gsa-BLUE (read) --> secret-BLUE
+
+############################################
+TEST:
+service account GREEN can read secret GREEN, cannot read secret BLUE
+service account BLUE can read secret BLUE, cannot read secret GREEN
+#############################################
+

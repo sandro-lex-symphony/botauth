@@ -1,0 +1,14 @@
+Proxy:
+1. use service account to read secret
+2. generate a JWT
+3. authenticate within symphony pod, get session token and key manager token
+4. wait for connections
+5. if request /authenticate, generate random string and send back (simulate session / keymanager token)
+6. else, check if random string is present, if not return 401
+8. acts as proxy, add session token and key manager token headers. 
+
+Bot
+1. always communicate in localhost (proxy)
+2. send authenticate and receive random string for both session and key manager token (proxy #5)
+3. use random as token, normal operation
+

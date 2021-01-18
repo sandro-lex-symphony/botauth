@@ -1,0 +1,31 @@
+Problems we're trying to solve:
+
+1. secrets can be accessed by any workload / operator in the K8s cluster
+- we use namepsaces and service account. Each bot lives in its namespace and has a k8s service account. 
+- a service account cannot be used outside of its namespace
+- only the service account has permissions to read its secrets
+- if using K8s secrets, use K8s RBAC to limit secret access
+- if GCP Secret manager, set workload identity. Create a GCP Service account, bind it to the K8s service account. Then only the service account is allowed to read its secrets
+- add logs, audit to secrets access
+
+
+2. container secrets are mounted in filesystem, or env vars. Anyone who have access to the container (kubectl exec) can read the secret
+- never mount the secret into FS or use env vars. Make the container read the secret from the Secret backend during start up. Use the Service Account Permissions to authenticate within the secret backends
+- private key is only available in container memory
+
+3. using 1 and 2, we will need to modify the bot code to get the secret from secret backend before start up
+- use the proxy as a side car
+- the proxy will to all the magic, get the secret, create a jwt, authenticate within Symphony POD and get the session / key manager token
+- the bot dont need to have access to the private key. it will always connect to localhost and let the proxy decorate the requests with authorization headers
+
+
+
+Know issues:
+if an attacker has RCE into the container (or malicious operator), it can send requests to localhost (proxy) and have access to Symphony POD
+--> we added a random string that is generated for every requests to /authenticate, subsequent requests have to use the same string
+--> not sure if that works well
+
+If an attacker has RCE  into the container, it can requests metadata endpoint (169.254.169.254) and get service account token, then request Key manager secret, forge an JWT and impersonate bot.  
+--> any read access to secrets that is not bot start up is an alert. How to verify? 
+
+

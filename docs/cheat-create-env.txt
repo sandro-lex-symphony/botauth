@@ -1,0 +1,130 @@
+# create cluster
+
+gcloud beta container --project "sym-infosec-dev" clusters create "cluster-1" --zone "us-central1-c" --no-enable-basic-auth --cluster-version "1.16.15-gke.4901" --release-channel "None" --machine-type "e2-medium" --image-type "COS" --disk-type "pd-standard" --disk-size "100" --metadata disable-legacy-endpoints=true --scopes "https://www.googleapis.com/auth/devstorage.read_only","https://www.googleapis.com/auth/logging.write","https://www.googleapis.com/auth/monitoring","https://www.googleapis.com/auth/servicecontrol","https://www.googleapis.com/auth/service.management.readonly","https://www.googleapis.com/auth/trace.append" --num-nodes "3" --enable-stackdriver-kubernetes --enable-ip-alias --network "projects/sym-infosec-dev/global/networks/default" --subnetwork "projects/sym-infosec-dev/regions/us-central1/subnetworks/default" --default-max-pods-per-node "110" --no-enable-master-authorized-networks --addons HorizontalPodAutoscaling,HttpLoadBalancing --enable-autoupgrade --enable-autorepair --max-surge-upgrade 1 --max-unavailable-upgrade 0 --workload-pool "sym-infosec-dev.svc.id.goog"
+
+
+https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity#gcloud_1
+
+# get k8s creds
+gcloud container clusters get-credentials cluster-1
+
+# create namespaces
+kubectl create namespace namespace-a
+kubectl create namespace namespace-b
+
+# create k8s service accounts
+kubectl create serviceaccount --namespace namespace-a serviceaccount-a
+kubectl create serviceaccount --namespace namespace-b serviceaccount-b
+
+# create google service accounts
+gcloud iam service-accounts create gservice-account-a
+gcloud iam service-accounts create gservice-account-b
+
+# bind accounts
+gcloud iam service-accounts add-iam-policy-binding \
+  --role roles/iam.workloadIdentityUser \
+  --member "serviceAccount:sym-infosec-dev.svc.id.goog[namespace-a/serviceaccount-a]" \
+  gservice-account-a@sym-infosec-dev.iam.gserviceaccount.com
+
+gcloud iam service-accounts add-iam-policy-binding \
+  --role roles/iam.workloadIdentityUser \
+  --member "serviceAccount:sym-infosec-dev.svc.id.goog[namespace-b/serviceaccount-b]" \
+  gservice-account-b@sym-infosec-dev.iam.gserviceaccount.com
+
+# add K8s annotation on the service account
+kubectl annotate serviceaccount \
+  --namespace namespace-a \
+  serviceaccount-a \
+  iam.gke.io/gcp-service-account=gservice-account-a@sym-infosec-dev.iam.gserviceaccount.com
+
+kubectl annotate serviceaccount \
+  --namespace namespace-b \
+  serviceaccount-b \
+  iam.gke.io/gcp-service-account=gservice-account-b@sym-infosec-dev.iam.gserviceaccount.com
+
+
+# list google service accounts
+gcloud iam service-accounts list
+
+
+
+# create secrets
+gcloud secrets create secret-a
+echo -n "this is my secret-a" | \
+    gcloud secrets versions add secret-a --data-file=-
+
+gcloud secrets create secret-b
+echo -n "this is secret b" | \
+    gcloud secrets versions add secret-b --data-file=-
+
+
+# test reading secrets using prj owner account
+gcloud secrets versions access 1 --secret secret-a
+gcloud secrets versions access 1 --secret secret-b
+
+
+
+######
+gcloud secrets add-iam-policy-binding secret-blue     --member="serviceAccount:gsa-blue@sym-infosec-dev.iam.gserviceaccount.com"     --role="roles/secretmanager.secretAccessor"
+#####
+
+# add role to google service accounts
+gcloud projects add-iam-policy-binding projects/837569460292/secrets/secret-a \
+    --member='gservice-account-a@sym-infosec-dev.iam.gserviceaccount.com' --role='roles/secretmanager.secretAccessor'
+
+gcloud iam service-accounts add-iam-policy-binding \
+            gservice-account-a@sym-infosec-dev.iam.gserviceaccount.com \
+            --member='serviceAccount:gservice-account-a@sym-infosec-dev.iam.gserviceaccount.com' \
+            --role='roles/secretmanager.secretAccessor'
+
+
+# run container in namespace a with service account a
+kubectl run -it \
+  --image google/cloud-sdk:slim \
+  --serviceaccount serviceaccount-a \
+  --namespace namespace-a \
+  workload-identity-test
+
+# check active service account
+gcloud auth list
+
+# can read secret-a can't read secret-b 
+# can't exec namespace-a with service account b
+
+gcloud secrets list
+--> can list secrets
+
+
+# create json for service account 
+gcloud iam service-accounts keys create sa-green.json --iam-account=gsa-green@sym-infosec-dev.iam.gserviceaccount.com
+
+export GOOGLE_APPLICATION_CREDENTIALS=sa-green.json
+
+# run app 
+
+# add images to registry
+docker tag source gcr.io/project/image:tag
+docker push gcr.io/project/image:tag
+
+# list images
+gcloud container images list
+
+
+# run container with image
+kubectl run -it \
+   --image gcr.io/sym-infosec-dev/green:1 \
+   --serviceaccount sa-green \
+   --namespace ns-green \
+   green-test
+
+# get token from metadata
+curl 'http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/token' -H 'Metadata-Flavor: Google'
+
+
+# access secret from instance
+curl "https://secretmanager.googleapis.com/v1/projects/sym-infosec-dev/secrets/secret-green/versions/1:access" \
+    --request "GET" \
+    --header "authorization: Bearer $token" \
+    --header "content-type: application/json" \
+    --header "x-goog-user-project: project-id" \
+    | jq -r ".payload.data" | base64 --decode
