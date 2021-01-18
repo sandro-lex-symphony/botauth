@@ -1,5 +1,6 @@
 {
     "POD_HOST": "develop.symphony.com",
     "KEY_PATH": "rsa-private.pem",
-    "BOT_NAME": "spaceinvader"
+    "BOT_NAME": "spaceinvader",
+    "SECRET_NAME": "projects/sym-infosec-dev/secrets/secret-green/versions/2"
 }

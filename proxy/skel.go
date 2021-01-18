@@ -2,6 +2,7 @@ package main
 
 import (
     "bytes"
+    "context"
     "crypto/rsa"
     "encoding/json"
     "fmt"
@@ -14,14 +15,18 @@ import (
     "os"
     "strings"
     "time"
+
     "github.com/dgrijalva/jwt-go"
     "github.com/tkanos/gonfig"
+    secretmanager "cloud.google.com/go/secretmanager/apiv1"
+    secretmanagerpb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1"
 )
 
 type Configuration struct {
     POD_HOST string
     KEY_PATH string
     BOT_NAME string
+    SECRET_NAME string
 }
 
 var (
@@ -49,6 +54,33 @@ func genRand() string {
         b.WriteRune(chars[rand.Intn(len(chars))])
     }
     return b.String() // E.g. "ExcbsVQs"
+}
+
+
+func getSecret(name string) (string, error) {
+    // name := "projects/my-project/secrets/my-secret/versions/5"
+
+    // Create the client.
+    ctx := context.Background()
+    client, err := secretmanager.NewClient(ctx)
+    if err != nil {
+        return "", fmt.Errorf("failed to create secretmanager client: %v", err)
+    }
+
+    // Build the request.
+    req := &secretmanagerpb.AccessSecretVersionRequest{
+        Name: name,
+    }
+
+    // Call the API.
+    result, err := client.AccessSecretVersion(ctx, req)
+    if err != nil {
+        return "", fmt.Errorf("failed to access secret version: %v", err)
+    }
+
+    // WARNING: Do not print the secret in a production environment - this snippet
+    // is showing how to access the secret material.
+    return string(result.Payload.Data), nil
 }
 
 // interacts with POD to authenticated
@@ -84,7 +116,7 @@ func auth(token string, podurl string) string {
 
 // gen JWT from private key
 // the jwt is used to auth with pod
-func genToken(path string, botname string) string {
+func genToken(path string, botname string, sname string) string {
     expirationTime := time.Now().Add(5 * time.Minute)
     claims := jwt.StandardClaims{
         ExpiresAt: expirationTime.Unix(),
@@ -96,12 +128,17 @@ func genToken(path string, botname string) string {
     signKey, err = jwt.ParseRSAPrivateKeyFromPEM(signBytes)
     fatal(err)
 
+    key, err := getSecret(sname)
+    fatal(err)
+    sign2, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(key))
+    fatal(err)
 
     alg := jwt.GetSigningMethod("RS512")
 
     token := jwt.NewWithClaims(alg, claims)
 
-    out, err := token.SignedString(signKey)
+    //out, err := token.SignedString(signKey)
+    out, err := token.SignedString(sign2)
     fatal(err)
     return out
 }
@@ -137,7 +174,7 @@ func main() {
     remote, err := url.Parse(pod_url)
     fatal(err)
 
-    token := genToken(configuration.KEY_PATH, configuration.BOT_NAME)
+    token := genToken(configuration.KEY_PATH, configuration.BOT_NAME, configuration.SECRET_NAME)
     sessionToken := auth(token, pod_url + "/login/pubkey/authenticate")
     kmToken := auth(token, pod_url + "/relay/pubkey/authenticate")
     fmt.Println(sessionToken)
