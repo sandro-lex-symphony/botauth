@@ -128,3 +128,10 @@ curl "https://secretmanager.googleapis.com/v1/projects/sym-infosec-dev/secrets/s
     --header "content-type: application/json" \
     --header "x-goog-user-project: project-id" \
     | jq -r ".payload.data" | base64 --decode
+
+
+# Clean up
+1.  delete K8s cluster
+2.  delete secrets
+3.  delete gcp service accounts
+4.  delete images from registry 
