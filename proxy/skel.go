@@ -123,21 +123,25 @@ func genToken(path string, botname string, sname string) string {
         Subject: botname,
     }
 
-    signBytes, err := ioutil.ReadFile(path)
-    fatal(err)
-    signKey, err = jwt.ParseRSAPrivateKeyFromPEM(signBytes)
-    fatal(err)
+    alg := jwt.GetSigningMethod("RS512")
+    token := jwt.NewWithClaims(alg, claims)
+
+    // if no secretPath defined, get the private key from config file
+    if sname == "" {
+        signBytes, err := ioutil.ReadFile(path)
+        fatal(err)
+        signKey, err = jwt.ParseRSAPrivateKeyFromPEM(signBytes)
+        fatal(err)
+        out, err := token.SignedString(signKey)
+        fatal(err)
+        return out
+    }
 
     key, err := getSecret(sname)
     fatal(err)
     sign2, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(key))
     fatal(err)
 
-    alg := jwt.GetSigningMethod("RS512")
-
-    token := jwt.NewWithClaims(alg, claims)
-
-    //out, err := token.SignedString(signKey)
     out, err := token.SignedString(sign2)
     fatal(err)
     return out
